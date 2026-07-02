@@ -16,7 +16,7 @@ solution is Everything-as-Code, built and deployed through a **Jenkins pipeline*
   │ mvn verify       │  │  │  repo    │      │  ┌─────────────────┐  │   │
   │  (100% coverage) │  │  └────▲─────┘      │  │  ECS Fargate    │  │   │
   │ sonar + gate     │──┼──────►│ push       │  │  cluster        │  │   │
-  │ docker push      │  │       │ pull       │  │  ┌───────────┐  │  │   │
+  │ jib image push   │  │       │ pull       │  │  ┌───────────┐  │  │   │
   │ cdk deploy       │  │       └────────────┼──┼─►│ Spring    │  │  │   │
   └──────────────────┘  │                    │  │  │ Boot task │◄─┼──┼───┼── ALB ◄── Browser
                         │  ┌──────────────┐  │  │  │ x2        │  │  │   │
@@ -52,7 +52,8 @@ configuration version in AppConfig is reflected on the page within ~30 seconds �
 ## Prerequisites
 
 - JDK 17+, Maven 3.9+
-- Docker (for image build)
+- No Docker required — the image is built and pushed by the Jib Maven plugin
+  (a [Dockerfile](app/Dockerfile) is still included for anyone who prefers a classic docker build)
 - Node.js + AWS CDK CLI (`npm install -g aws-cdk`) — the CDK *code* is Java; the CLI is the only Node piece
 - AWS CLI configured, account bootstrapped once: `cdk bootstrap aws://<account>/<region>`
 - Jenkins with: Pipeline, JUnit, HTML Publisher, SonarQube Scanner, AWS Steps plugins; a SonarQube server registered as `sonarqube`; Maven/JDK tools named `maven-3.9` / `jdk-17`; AWS credentials with id `aws-deploy-credentials`
@@ -84,8 +85,10 @@ cd ..
 mvn -pl app -am clean verify
 ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
 ECR_URI="${ACCOUNT_ID}.dkr.ecr.us-east-1.amazonaws.com/ecs-fargate-appconfig-demo"
-aws ecr get-login-password | docker login --username AWS --password-stdin "${ECR_URI%%/*}"
-docker build -t "${ECR_URI}:v1" app && docker push "${ECR_URI}:v1"
+mvn -pl app jib:build \
+  -Djib.to.image="${ECR_URI}:v1" \
+  -Djib.to.auth.username=AWS \
+  -Djib.to.auth.password="$(aws ecr get-login-password)"
 
 # 3. Fargate service
 cd infra

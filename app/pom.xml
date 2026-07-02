@@ -72,6 +72,27 @@
                     </execution>
                 </executions>
             </plugin>
+            <!-- Builds and pushes the container image without a Docker daemon:
+                 mvn -pl app jib:build -Djib.to.image=<ecr-uri>:<tag> -->
+            <plugin>
+                <groupId>com.google.cloud.tools</groupId>
+                <artifactId>jib-maven-plugin</artifactId>
+                <version>3.4.5</version>
+                <configuration>
+                    <from>
+                        <image>eclipse-temurin:17-jre-jammy</image>
+                    </from>
+                    <container>
+                        <ports>
+                            <port>8080</port>
+                        </ports>
+                        <user>1000:1000</user>
+                        <jvmFlags>
+                            <jvmFlag>-XX:MaxRAMPercentage=75.0</jvmFlag>
+                        </jvmFlags>
+                    </container>
+                </configuration>
+            </plugin>
         </plugins>
     </build>
 </project>

@@ -71,19 +71,19 @@ pipeline {
             }
         }
 
-        stage('Docker Build & Push to ECR') {
+        stage('Image Build & Push to ECR (Jib, no Docker needed)') {
             steps {
                 withAWS(credentials: env.AWS_CREDENTIALS_ID, region: env.AWS_REGION) {
                     sh '''
                         ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
                         ECR_URI="${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO_NAME}"
+                        ECR_PASSWORD=$(aws ecr get-login-password --region "${AWS_REGION}")
 
-                        aws ecr get-login-password --region "${AWS_REGION}" \
-                            | docker login --username AWS --password-stdin "${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
-
-                        docker build -t "${ECR_URI}:${IMAGE_TAG}" -t "${ECR_URI}:latest" app
-                        docker push "${ECR_URI}:${IMAGE_TAG}"
-                        docker push "${ECR_URI}:latest"
+                        mvn -B -pl app jib:build \
+                            -Djib.to.image="${ECR_URI}:${IMAGE_TAG}" \
+                            -Djib.to.tags=latest \
+                            -Djib.to.auth.username=AWS \
+                            -Djib.to.auth.password="${ECR_PASSWORD}"
                     '''
                 }
             }
