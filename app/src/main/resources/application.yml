@@ -1,0 +1,22 @@
+spring:
+  application:
+    name: ecs-fargate-appconfig-demo
+
+server:
+  port: 8080
+
+appconfig:
+  application-id: ${APPCONFIG_APPLICATION_ID:}
+  environment-id: ${APPCONFIG_ENVIRONMENT_ID:}
+  configuration-profile-id: ${APPCONFIG_PROFILE_ID:}
+  poll-interval-seconds: ${APPCONFIG_POLL_INTERVAL_SECONDS:30}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true

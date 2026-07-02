@@ -1,0 +1,24 @@
+# Claude Code local settings
+.claude/settings.local.json
+
+# Maven
+target/
+
+# CDK
+cdk.out/
+.cdk.staging/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+.classpath
+.project
+.settings/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log

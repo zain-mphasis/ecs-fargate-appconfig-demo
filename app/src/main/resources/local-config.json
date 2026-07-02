@@ -1,0 +1,8 @@
+{
+  "applicationName": "ECS Fargate AppConfig Demo",
+  "environment": "local",
+  "welcomeMessage": "Hello from the local configuration file!",
+  "featureDarkModeEnabled": false,
+  "maxItemsPerPage": 25,
+  "supportContact": "zain.akhtar1@mphasis.com"
+}

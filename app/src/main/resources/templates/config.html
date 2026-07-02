@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+    <title>Application Configuration</title>
+    <style>
+        :root { color-scheme: light; }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            font-family: "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background: linear-gradient(135deg, #1b2a4a 0%, #23395d 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem;
+        }
+        .card {
+            background: #ffffff;
+            border-radius: 12px;
+            box-shadow: 0 20px 45px rgba(0, 0, 0, 0.35);
+            max-width: 760px;
+            width: 100%;
+            padding: 2rem 2.5rem;
+        }
+        h1 { margin: 0 0 0.25rem; font-size: 1.6rem; color: #1b2a4a; }
+        .meta { color: #5a6b8c; font-size: 0.9rem; margin: 0 0 1.5rem; }
+        .badge {
+            display: inline-block;
+            background: #e8f1ff;
+            color: #1c5bd8;
+            border-radius: 999px;
+            padding: 0.15rem 0.7rem;
+            font-weight: 600;
+        }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { text-align: left; padding: 0.65rem 0.75rem; }
+        thead th {
+            background: #f2f5fb;
+            color: #33415e;
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        tbody tr { border-bottom: 1px solid #eef1f7; }
+        tbody td:first-child { font-weight: 600; color: #33415e; }
+        tbody td:last-child { color: #1c5bd8; font-family: Consolas, monospace; }
+        .hint { margin-top: 1.5rem; color: #8a97b1; font-size: 0.8rem; }
+        code { background: #f2f5fb; padding: 0.1rem 0.3rem; border-radius: 4px; }
+    </style>
+</head>
+<body>
+<main class="card">
+    <h1>Application Configuration</h1>
+    <p class="meta">
+        Source: <span class="badge" id="source" th:text="${source}">-</span>
+        &nbsp;|&nbsp; Last updated: <span id="lastUpdated" th:text="${lastUpdated}">-</span>
+    </p>
+    <table>
+        <thead>
+        <tr>
+            <th>Configuration Key</th>
+            <th>Value</th>
+        </tr>
+        </thead>
+        <tbody id="config-body">
+        <tr th:each="entry : ${configuration}">
+            <td th:text="${entry.key}">key</td>
+            <td th:text="${entry.value}">value</td>
+        </tr>
+        </tbody>
+    </table>
+    <p class="hint">
+        This page polls <code>/api/config</code> every 5 seconds. Deploy a new configuration
+        version in AWS AppConfig and the values below update automatically.
+    </p>
+</main>
+<script>
+    async function refreshConfig() {
+        try {
+            const response = await fetch('/api/config');
+            const data = await response.json();
+            document.getElementById('source').textContent = data.source;
+            document.getElementById('lastUpdated').textContent = data.lastUpdated;
+            const body = document.getElementById('config-body');
+            body.innerHTML = '';
+            Object.entries(data.configuration).forEach(([key, value]) => {
+                const row = body.insertRow();
+                row.insertCell().textContent = key;
+                row.insertCell().textContent = String(value);
+            });
+        } catch (e) {
+            /* keep the last rendered values if a poll fails */
+        }
+    }
+    setInterval(refreshConfig, 5000);
+</script>
+</body>
+</html>
