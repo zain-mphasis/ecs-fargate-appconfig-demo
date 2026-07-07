@@ -2,6 +2,7 @@ package com.mphasis.infra;
 
 import java.util.List;
 import java.util.Map;
+import java.util.TreeMap;
 import software.amazon.awscdk.Stack;
 import software.amazon.awscdk.StackProps;
 import software.amazon.awscdk.services.ec2.Vpc;
@@ -52,13 +53,15 @@ public class FargateServiceStack extends Stack {
                         .taskImageOptions(ApplicationLoadBalancedTaskImageOptions.builder()
                                 .image(ContainerImage.fromEcrRepository(repository, imageTag))
                                 .containerPort(8080)
-                                .environment(Map.of(
+                                // TreeMap: Map.of iteration order is randomized per JVM, which
+                                // would make the synthesized template differ run to run.
+                                .environment(new TreeMap<>(Map.of(
                                         "SPRING_PROFILES_ACTIVE", "aws",
                                         "AWS_REGION", getRegion(),
                                         "APPCONFIG_APPLICATION_ID", appConfig.getApplicationId(),
                                         "APPCONFIG_ENVIRONMENT_ID", appConfig.getEnvironmentId(),
                                         "APPCONFIG_PROFILE_ID", appConfig.getConfigurationProfileId(),
-                                        "APPCONFIG_POLL_INTERVAL_SECONDS", "30"))
+                                        "APPCONFIG_POLL_INTERVAL_SECONDS", "30")))
                                 .build())
                         .build();
 

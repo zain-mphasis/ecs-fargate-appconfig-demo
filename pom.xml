@@ -34,8 +34,10 @@
         <sonar-maven-plugin.version>4.0.0.4121</sonar-maven-plugin.version>
         <exec-maven-plugin.version>3.2.0</exec-maven-plugin.version>
 
-        <!-- SonarQube -->
-        <sonar.projectKey>ecs-fargate-appconfig-demo</sonar.projectKey>
+        <!-- SonarQube / SonarCloud -->
+        <sonar.host.url>https://sonarcloud.io</sonar.host.url>
+        <sonar.organization>zain-mphasis</sonar.organization>
+        <sonar.projectKey>zain-mphasis_ecs-fargate-appconfig-demo</sonar.projectKey>
         <sonar.projectName>ECS Fargate AppConfig Demo</sonar.projectName>
         <sonar.java.source>17</sonar.java.source>
         <sonar.coverage.jacoco.xmlReportPaths>${project.build.directory}/site/jacoco/jacoco.xml</sonar.coverage.jacoco.xmlReportPaths>

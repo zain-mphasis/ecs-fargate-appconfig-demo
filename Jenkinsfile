@@ -44,19 +44,16 @@ pipeline {
             }
         }
 
-        stage('SonarQube Analysis') {
+        stage('Sonar Analysis & Quality Gate') {
             steps {
                 // 'sonarqube' must match the server name in "Manage Jenkins > System > SonarQube servers"
+                // (for SonarCloud: URL https://sonarcloud.io + a token credential).
+                // sonar.qualitygate.wait makes the scanner itself block on the gate and fail the
+                // build if it is red - no webhook back to Jenkins required.
                 withSonarQubeEnv('sonarqube') {
-                    sh 'mvn -B sonar:sonar'
-                }
-            }
-        }
-
-        stage('Sonar Quality Gate') {
-            steps {
-                timeout(time: 10, unit: 'MINUTES') {
-                    waitForQualityGate abortPipeline: true
+                    timeout(time: 10, unit: 'MINUTES') {
+                        sh 'mvn -B sonar:sonar -Dsonar.qualitygate.wait=true'
+                    }
                 }
             }
         }

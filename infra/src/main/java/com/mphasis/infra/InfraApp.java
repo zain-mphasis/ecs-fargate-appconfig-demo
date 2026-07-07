@@ -1,5 +1,6 @@
 package com.mphasis.infra;
 
+import java.util.Objects;
 import software.amazon.awscdk.App;
 
 /**
@@ -23,8 +24,7 @@ public final class InfraApp {
     }
 
     static void createStacks(final App app) {
-        Object imageTagContext = app.getNode().tryGetContext("imageTag");
-        String imageTag = imageTagContext == null ? "latest" : imageTagContext.toString();
+        String imageTag = Objects.toString(app.getNode().tryGetContext("imageTag"), "latest");
 
         EcrStack ecrStack = new EcrStack(app, "DemoEcrStack");
         AppConfigStack appConfigStack = new AppConfigStack(app, "DemoAppConfigStack");

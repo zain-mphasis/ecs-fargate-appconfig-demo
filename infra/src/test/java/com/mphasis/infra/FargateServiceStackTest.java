@@ -40,10 +40,10 @@ class FargateServiceStackTest {
                                 "ContainerPort", 8080)))),
                         "Environment", Match.arrayWith(List.of(
                                 Match.objectLike(Map.of(
-                                        "Name", "SPRING_PROFILES_ACTIVE",
-                                        "Value", "aws")),
+                                        "Name", "APPCONFIG_APPLICATION_ID")),
                                 Match.objectLike(Map.of(
-                                        "Name", "APPCONFIG_APPLICATION_ID"))))))))));
+                                        "Name", "SPRING_PROFILES_ACTIVE",
+                                        "Value", "aws"))))))))));
     }
 
     @Test
