@@ -1,5 +1,8 @@
 # ECS Fargate + AWS AppConfig Demo
 
+[![CI](https://github.com/zain-mphasis/ecs-fargate-appconfig-demo/actions/workflows/ci.yml/badge.svg)](https://github.com/zain-mphasis/ecs-fargate-appconfig-demo/actions/workflows/ci.yml)
+[![Quality Gate](https://sonarcloud.io/api/project_badges/measure?project=zain-mphasis_ecs-fargate-appconfig-demo&metric=alert_status)](https://sonarcloud.io/dashboard?id=zain-mphasis_ecs-fargate-appconfig-demo)
+
 A Spring Boot application deployed to an **ECS Fargate cluster** that serves a configuration
 page whose values are read **dynamically from AWS AppConfig**. Everything — application *and*
 infrastructure — is written in **Java**: the infrastructure is AWS CDK (Java), so the whole
@@ -39,6 +42,7 @@ configuration version in AppConfig is reflected on the page within ~30 seconds �
 | [app/Dockerfile](app/Dockerfile) | Container image for the app |
 | [infra/](infra/) | AWS CDK **in Java**: ECR, AppConfig and Fargate service stacks |
 | [Jenkinsfile](Jenkinsfile) | Full CI/CD pipeline: test → coverage gate → Sonar → deploy |
+| [.github/workflows/ci.yml](.github/workflows/ci.yml) | GitHub Actions CI (runs on every push): same build, coverage gate and Sonar quality gate as the Jenkins pipeline |
 | [pom.xml](pom.xml) | Parent POM with the JaCoCo 100% rule and Sonar settings |
 
 ### CDK stacks (all Java)
