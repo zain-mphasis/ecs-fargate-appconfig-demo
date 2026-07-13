@@ -1,7 +1,7 @@
 {
   "applicationName": "ECS Fargate AppConfig Demo",
   "environment": "production",
-  "welcomeMessage": "Deployed from Git - configuration as code!",
+  "welcomeMessage": "Changed from GitHub by Zain - fully automated!",
   "featureDarkModeEnabled": false,
   "maxItemsPerPage": 50,
   "supportContact": "zain.akhtar1@mphasis.com"
