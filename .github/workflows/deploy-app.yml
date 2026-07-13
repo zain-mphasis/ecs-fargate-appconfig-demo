@@ -1,0 +1,80 @@
+name: Deploy app to ECS
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'app/**'
+      - 'infra/**'
+      - 'pom.xml'
+      - '.github/workflows/deploy-app.yml'
+
+permissions:
+  id-token: write   # OIDC token for keyless AWS auth
+  contents: read
+
+concurrency:
+  group: deploy-app
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: us-east-1
+  ECR_URI: 550651695856.dkr.ecr.us-east-1.amazonaws.com/ecs-fargate-appconfig-demo
+  IMAGE_TAG: gh-${{ github.run_number }}
+
+jobs:
+  deploy:
+    name: Test, gate, build image, deploy to Fargate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+
+      - name: Build and test (100% coverage gate)
+        run: mvn -B clean verify
+
+      - name: Configure AWS credentials (OIDC, no stored keys)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::550651695856:role/github-actions-deploy
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Build and push image with Jib
+        run: |
+          mvn -B -pl app jib:build \
+            -Djib.to.image="${ECR_URI}:${IMAGE_TAG}" \
+            -Djib.to.tags=latest \
+            -Djib.to.auth.username=AWS \
+            -Djib.to.auth.password="$(aws ecr get-login-password --region ${AWS_REGION})"
+
+      - name: Deploy Fargate service (CDK)
+        working-directory: infra
+        run: |
+          npm install -g aws-cdk
+          cdk deploy DemoFargateServiceStack -c imageTag="${IMAGE_TAG}" --require-approval never
+
+      - name: Smoke test
+        run: |
+          SERVICE_URL=$(aws cloudformation describe-stacks \
+            --stack-name DemoFargateServiceStack \
+            --query "Stacks[0].Outputs[?contains(OutputKey, 'ServiceURL')].OutputValue | [0]" \
+            --output text)
+          echo "Service URL: ${SERVICE_URL}"
+          for i in $(seq 1 30); do
+            if curl -sf "${SERVICE_URL}/api/config" > /dev/null; then
+              echo "Service healthy. Current configuration:"
+              curl -s "${SERVICE_URL}/api/config"
+              exit 0
+            fi
+            echo "Waiting for service... (${i}/30)"
+            sleep 10
+          done
+          echo "Service did not become healthy in time." >&2
+          exit 1

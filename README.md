@@ -43,6 +43,9 @@ configuration version in AppConfig is reflected on the page within ~30 seconds �
 | [infra/](infra/) | AWS CDK **in Java**: ECR, AppConfig and Fargate service stacks |
 | [Jenkinsfile](Jenkinsfile) | Full CI/CD pipeline: test → coverage gate → Sonar → deploy |
 | [.github/workflows/ci.yml](.github/workflows/ci.yml) | GitHub Actions CI (runs on every push): same build, coverage gate and Sonar quality gate as the Jenkins pipeline |
+| [.github/workflows/deploy-app.yml](.github/workflows/deploy-app.yml) | **Auto-deploy**: any push touching `app/`, `infra/` or `pom.xml` tests, gates, builds the image and deploys it to ECS Fargate — keyless via GitHub OIDC |
+| [.github/workflows/deploy-config.yml](.github/workflows/deploy-config.yml) | **Config as code**: any push touching [config/runtime-settings.json](config/runtime-settings.json) publishes it as a new AppConfig version and deploys it — the live page updates within ~30s |
+| [config/runtime-settings.json](config/runtime-settings.json) | The runtime configuration, versioned in Git. Edit → push → live. |
 | [pom.xml](pom.xml) | Parent POM with the JaCoCo 100% rule and Sonar settings |
 
 ### CDK stacks (all Java)

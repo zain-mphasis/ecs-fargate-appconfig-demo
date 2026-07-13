@@ -1,0 +1,85 @@
+name: Deploy configuration to AppConfig
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'config/**'
+      - '.github/workflows/deploy-config.yml'
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: deploy-config
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: us-east-1
+
+jobs:
+  deploy-config:
+    name: Publish config/runtime-settings.json as a new AppConfig version
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate JSON
+        run: python3 -m json.tool config/runtime-settings.json
+
+      - name: Configure AWS credentials (OIDC, no stored keys)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::550651695856:role/github-actions-deploy
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Create and deploy new configuration version
+        run: |
+          APP_ID=$(aws cloudformation describe-stacks --stack-name DemoAppConfigStack \
+            --query "Stacks[0].Outputs[?OutputKey=='ApplicationId'].OutputValue" --output text)
+          ENV_ID=$(aws cloudformation describe-stacks --stack-name DemoAppConfigStack \
+            --query "Stacks[0].Outputs[?OutputKey=='EnvironmentId'].OutputValue" --output text)
+          PROFILE_ID=$(aws cloudformation describe-stacks --stack-name DemoAppConfigStack \
+            --query "Stacks[0].Outputs[?OutputKey=='ConfigurationProfileId'].OutputValue" --output text)
+          STRATEGY_ID=$(aws appconfig list-deployment-strategies \
+            --query "Items[?Name=='ecs-fargate-demo-all-at-once'].Id" --output text)
+
+          VERSION=$(aws appconfig create-hosted-configuration-version \
+            --application-id "$APP_ID" \
+            --configuration-profile-id "$PROFILE_ID" \
+            --content-type application/json \
+            --content fileb://config/runtime-settings.json \
+            /tmp/version-out.json --query VersionNumber --output text)
+          echo "Created hosted configuration version ${VERSION}"
+
+          DEPLOYMENT=$(aws appconfig start-deployment \
+            --application-id "$APP_ID" --environment-id "$ENV_ID" \
+            --configuration-profile-id "$PROFILE_ID" \
+            --configuration-version "$VERSION" \
+            --deployment-strategy-id "$STRATEGY_ID" \
+            --query DeploymentNumber --output text)
+          echo "Started deployment ${DEPLOYMENT}"
+
+          for i in $(seq 1 20); do
+            STATE=$(aws appconfig get-deployment \
+              --application-id "$APP_ID" --environment-id "$ENV_ID" \
+              --deployment-number "$DEPLOYMENT" --query State --output text)
+            echo "Deployment state: ${STATE}"
+            [ "$STATE" = "COMPLETE" ] && exit 0
+            [ "$STATE" = "ROLLED_BACK" ] && exit 1
+            sleep 5
+          done
+          echo "Deployment did not complete in time" >&2
+          exit 1
+
+      - name: Show it live (containers pick it up within ~30s)
+        run: |
+          SERVICE_URL=$(aws cloudformation describe-stacks \
+            --stack-name DemoFargateServiceStack \
+            --query "Stacks[0].Outputs[?contains(OutputKey, 'ServiceURL')].OutputValue | [0]" \
+            --output text)
+          sleep 40
+          echo "Live configuration now served at ${SERVICE_URL}:"
+          curl -s "${SERVICE_URL}/api/config" || true
