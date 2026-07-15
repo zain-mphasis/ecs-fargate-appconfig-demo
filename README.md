@@ -165,3 +165,5 @@ runtime-settings → *Create version* → *Start deployment*.)
 | `APPCONFIG_PROFILE_ID` | Configuration profile | CDK cross-stack reference |
 | `APPCONFIG_POLL_INTERVAL_SECONDS` | Poll frequency (default 30) | CDK / optional |
 | `AWS_REGION` | SDK region | CDK |
+
+<!-- pipeline auto-trigger test 12:38:36 -->
