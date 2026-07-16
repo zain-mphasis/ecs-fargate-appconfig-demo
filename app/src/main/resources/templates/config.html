@@ -49,10 +49,26 @@
         tbody td:last-child { color: #1c5bd8; font-family: Consolas, monospace; }
         .hint { margin-top: 1.5rem; color: #8a97b1; font-size: 0.8rem; }
         code { background: #f2f5fb; padding: 0.1rem 0.3rem; border-radius: 4px; }
+        .brand { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1.25rem; }
+        .brand .logo { width: 44px; height: 44px; flex: none; }
+        .brand .name { font-size: 1.05rem; font-weight: 700; color: #1b2a4a; letter-spacing: 0.02em; }
+        .brand .tagline { font-size: 0.78rem; color: #8a97b1; }
     </style>
 </head>
 <body>
 <main class="card">
+    <div class="brand">
+        <svg class="logo" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <rect width="100" height="100" rx="22" fill="#1c5bd8"/>
+            <path d="M22 72V30l16 22 16-22v42" fill="none" stroke="#ffffff" stroke-width="8"
+                  stroke-linecap="round" stroke-linejoin="round"/>
+            <circle cx="72" cy="40" r="8" fill="#8fd0ff"/>
+        </svg>
+        <div>
+            <div class="name">Mphasis &middot; Config Console</div>
+            <div class="tagline">Live configuration from AWS AppConfig</div>
+        </div>
+    </div>
     <h1>Application Configuration</h1>
     <p class="meta">
         Source: <span class="badge" id="source" th:text="${source}">-</span>
