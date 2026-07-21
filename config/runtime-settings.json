@@ -3,6 +3,6 @@
   "environment": "production made by Zain Akhtar",
   "welcomeMessage": "Changed from GitHub by Zain - fully automated!",
   "featureDarkModeEnabled": true,
-  "maxItemsPerPage": 50,
+  "maxItemsPerPage": 1000,
   "supportContact": "zain.akhtar1@mphasis.com"
 }
