@@ -1,0 +1,498 @@
+# Spring Boot DynamoDB ECS Auto-Healing Demo
+
+This project is a Spring Boot sample application plus an agent-driven CI/CD workflow for detecting, fixing, approving, deploying, validating, and rolling back bug fixes on AWS ECS.
+
+## What The Project Does
+
+The application exposes employee APIs that accept JSON payloads and store employee data in DynamoDB. It includes Swagger/OpenAPI documentation and a Jenkins pipeline that builds a Docker image, pushes it to Amazon ECR, deploys it to ECS Fargate, validates the deployment, and rolls back automatically if validation fails.
+
+The agent workflow adds automation around bug handling:
+
+1. `JavaEcsMonitorAgent` monitors ECS service/task health and audits bugs.
+2. `JavaAutoFixAgent` applies a known validation fix, such as restoring address special-character validation.
+3. `JavaPrApprovalAgent` creates a GitHub PR and sends an email notification for human approval.
+4. `JavaOrchestratorAgent` runs the monitor, auto-fix, PR, and email agents as one coordinated workflow.
+5. Jenkins deploys merged/approved changes to ECS.
+6. `JavaValidateEcsDeploymentAgent` validates Swagger, employee POST/GET, and invalid address handling.
+7. `rollback_ecs.sh` restores the previous ECS task definition if validation fails.
+8. Agent and deployment actions are audited in DynamoDB table `AgentAudit`.
+
+## Tech Stack
+
+- Java 17+
+- Spring Boot
+- DynamoDB
+- H2 for local/test runs
+- Swagger/OpenAPI
+- Docker
+- Amazon ECR
+- Amazon ECS Fargate
+- Jenkins
+- Java command-line agents
+- GitHub PR API
+- SMTP email notification
+
+## Project Layout
+
+```text
+dynamodb-demo/
+  src/main/java/...          Spring Boot application
+  scripts/                   ECR push, ECS deploy, ECS rollback scripts
+  ecs/                       ECS task definition template
+  Jenkinsfile                Build, deploy, validate, rollback pipeline
+
+agent-runner/
+  src/main/java/...          External Java ECS monitor, auto-fix, PR/email, validation, and orchestrator agents
+  Dockerfile                 Separate agent container image
+  scripts/                   Local helper for running the agent container
+  pom.xml                    Agent-only dependencies such as ECS, EC2, DynamoDB audit, and email
+```
+
+## Required Local/AWS Setup
+
+You need:
+
+- AWS CLI configured with access to ECS, ECR, IAM, EC2 networking, and DynamoDB.
+- Docker running locally or on the Jenkins host.
+- Jenkins with credentials ID `aws` containing AWS access key and secret key.
+- DynamoDB tables:
+  - `Employees`
+  - `AgentAudit`
+- ECS cluster/service created, for example:
+  - cluster: `dynamodb-demo-cluster`
+  - service: `dynamodb-demo-service`
+  - task family: `dynamodb-demo-task`
+- ECR repository:
+  - `dynamodb-demo`
+
+## GitHub Token And Email Approval Setup
+
+The PR/email agent does not store secrets in code. Each user must provide their own token and email credentials through environment variables or CI/Jenkins secrets.
+
+Set GitHub token:
+
+```bash
+export GITHUB_TOKEN="your_github_token"
+```
+
+`GH_TOKEN` also works:
+
+```bash
+export GH_TOKEN="your_github_token"
+```
+
+Set approval email variables:
+
+```bash
+export APPROVAL_EMAIL_TO="approver@example.com"
+export EMAIL_FROM="your-email@example.com"
+export SMTP_HOST="smtp.gmail.com"
+export SMTP_PORT="587"
+export SMTP_USERNAME="your-email@example.com"
+export SMTP_PASSWORD="your_app_password"
+```
+
+For Gmail, `SMTP_PASSWORD` should be a Google app password, not your normal Google account password.
+If a school or work Google account rejects SMTP with `535 Username and Password not accepted`, use a personal Gmail account with its own Google app password.
+
+Check that variables are visible in your terminal:
+
+```bash
+test -n "$GITHUB_TOKEN" && echo "GITHUB_TOKEN is set"
+test -n "$APPROVAL_EMAIL_TO" && echo "APPROVAL_EMAIL_TO is set"
+echo "$SMTP_HOST"
+echo "$SMTP_PORT"
+echo "$SMTP_USERNAME"
+echo "$EMAIL_FROM"
+test -n "$SMTP_PASSWORD" && echo "SMTP_PASSWORD is set"
+echo ${#SMTP_PASSWORD}
+```
+
+Do not commit these values.
+
+## Run The App Locally
+
+The `local` Spring profile uses an in-memory H2 database, so you can run and test the API without AWS or local DynamoDB.
+
+From the project root:
+
+```bash
+cd dynamodb-demo
+./mvnw test
+./mvnw spring-boot:run -Dspring-boot.run.profiles=local
+```
+
+Swagger UI:
+
+```text
+http://localhost:8080/swagger-ui.html
+```
+
+OpenAPI JSON:
+
+```text
+http://localhost:8080/v3/api-docs
+```
+
+Local H2 console:
+
+```text
+http://localhost:8080/h2-console
+```
+
+Use this JDBC URL:
+
+```text
+jdbc:h2:mem:employees-local
+```
+
+## Run The Java Coordinated Agent Workflow
+
+The external agents read project-specific behavior from:
+
+```text
+agent-config/project-config.json
+agent-config/agent-prompt.md
+```
+
+`agent-prompt.md` describes the agent behavior and safety expectations. `project-config.json` defines concrete rules, such as which Java file/field/annotation to validate, what invalid payload should fail, and which AWS ECS service to monitor. To add another validation bug scenario, add another entry to `validationRules` instead of rewriting the Java agent.
+
+The main automation entry point is `JavaOrchestratorAgent`. In the production-style Jenkins flow, this is not run for every normal code change. Jenkins builds, tests, deploys, and validates first. If validation fails, Jenkins rolls ECS back and then invokes the external agent runner to prepare a fix PR and approval email.
+
+Manual run:
+
+```bash
+cd agent-runner
+
+./mvnw -q compile exec:java \
+  -Dexec.mainClass=com.example.agent.JavaOrchestratorAgent \
+  -Dexec.args='\
+  --email-mode smtp \
+  --fix-branch agent-auto-fix \
+  --paths dynamodb-demo/src/main/java/com/example/dynamodb_demo/model/Employee.java \
+  --pr-title "Agent fix: restore employee validation" \
+  --summary "The Java orchestrator detected a validation issue, applied an auto-fix, created a PR, and emailed human approval."'
+```
+
+For a local/demo run without ECS monitoring:
+
+```bash
+./mvnw -q compile exec:java \
+  -Dexec.mainClass=com.example.agent.JavaOrchestratorAgent \
+  -Dexec.args='\
+  --skip-monitor \
+  --email-mode smtp \
+  --fix-branch agent-auto-fix \
+  --paths dynamodb-demo/src/main/java/com/example/dynamodb_demo/model/Employee.java'
+```
+
+What it does:
+
+```text
+optionally monitor ECS
+auto-fix configured validation issue
+run tests
+detect changed source files
+create GitHub PR
+send approval email
+write audit records
+```
+
+If there are no source changes, it will not create a PR or send an approval email.
+
+## Run The Agent As A Separate Container
+
+The agent runner can be packaged separately from the Spring Boot app. The image contains the compiled Java agents, and the repository is mounted into `/workspace` at runtime so the agent can inspect source, apply fixes, run tests, create PRs, and send approval email.
+
+Build the agent image:
+
+```bash
+cd /Users/aasthadesai/springboot-dynamodb-project
+docker build -f agent-runner/Dockerfile -t agent-runner:local .
+```
+
+Run the orchestrator container from the repository root:
+
+```bash
+cd /Users/aasthadesai/springboot-dynamodb-project
+
+agent-runner/scripts/run-agent-container.sh \
+  --skip-monitor \
+  --config /opt/agent-config/project-config.json \
+  --repo-dir .. \
+  --project-dir ../dynamodb-demo \
+  --email-mode smtp \
+  --fix-branch agent-container-fix \
+  --paths dynamodb-demo/src/main/java/com/example/dynamodb_demo/model/Employee.java
+```
+
+The helper passes through AWS, GitHub, and SMTP environment variables from your shell. In Jenkins or ECS, provide those values as job secrets or task environment variables instead of storing them in code.
+
+AWS ECS
+``` bash
+aws ecs describe-services \
+  --cluster dynamodb-demo-cluster \
+  --services dynamodb-demo-service \
+  --region us-east-1 \
+  --query 'services[0].{status:status,running:runningCount,desired:desiredCount,taskDefinition:taskDefinition}' \
+  --output table
+  ```
+
+## Demo The Bug Fix Agent With A Controlled Bug
+
+Use fresh branch names for every demo run. Reusing old branch names can cause Git checkout errors because the agent creates local commits and PR branches.
+
+Start clean from `main`:
+
+```bash
+cd /Users/aasthadesai/springboot-dynamodb-project
+git restore README.md dynamodb-demo/src/main/java/com/example/dynamodb_demo/model/Employee.java
+git switch main
+git pull origin main
+```
+
+Create a new broken branch. Increase the number each time you rehearse the demo:
+
+```bash
+git switch -c demo-bug-run-final
+```
+
+Temporarily remove this annotation from the `address` field in `Employee.java`:
+
+```java
+@Pattern(regexp = "^[a-zA-Z0-9 ,.-]+$", message = "address contains invalid characters")
+```
+
+Commit and push the broken branch:
+
+```bash
+git add dynamodb-demo/src/main/java/com/example/dynamodb_demo/model/Employee.java
+git commit -m "test: remove employee address validation"
+git push -u origin demo-bug-run-final
+```
+
+Check secrets are set in the same terminal that will run Maven:
+
+```bash
+test -n "$GITHUB_TOKEN" && echo "GITHUB_TOKEN is set"
+test -n "$APPROVAL_EMAIL_TO" && echo "APPROVAL_EMAIL_TO is set"
+echo "$SMTP_HOST"
+echo "$SMTP_PORT"
+echo "$SMTP_USERNAME"
+echo "$EMAIL_FROM"
+test -n "$SMTP_PASSWORD" && echo "SMTP_PASSWORD is set"
+echo ${#SMTP_PASSWORD}
+```
+
+For Gmail app passwords, `${#SMTP_PASSWORD}` should usually print `16` if you pasted it without spaces.
+
+Run the orchestrator:
+
+```bash
+cd agent-runner
+
+./mvnw -q compile exec:java \
+  -Dexec.mainClass=com.example.agent.JavaOrchestratorAgent \
+  -Dexec.args='--skip-monitor --email-mode smtp --base-branch demo-bug-run-final --fix-branch demo-agent-fix-run-final --paths dynamodb-demo/src/main/java/com/example/dynamodb_demo/model/Employee.java --pr-title "Agent fix: restore employee address validation" --summary "The Java agent restored address special-character validation, created a PR, and emailed human approval."'
+```
+
+Expected result:
+
+```text
+Applied automatic fix
+Tests passed after auto-fix
+Pull request ready: https://github.com/...
+Email notification sent to ...
+```
+
+If you need to rerun the demo, go back to `main` and use new names:
+
+```text
+demo-bug-run-2
+demo-agent-fix-run-2
+```
+
+## Jenkins Deployment Flow
+
+After a human approves and merges the PR into `main`, Jenkins should deploy the approved change.
+
+If Jenkins is local, enable polling:
+
+```text
+Job -> Configure -> Build Triggers -> Poll SCM
+```
+
+Use this schedule for testing:
+
+```text
+* * * * *
+```
+
+When Jenkins detects the merge, the build should say:
+
+```text
+Started by an SCM change
+```
+
+Normal Jenkins parameters:
+
+```text
+IMAGE_TAG = blank
+FORCE_VALIDATION_FAILURE = false
+RUN_ECS_MONITOR = false
+AGENT_EMAIL_MODE = smtp
+```
+
+Leaving `IMAGE_TAG` blank makes Jenkins use an immutable build tag like:
+
+```text
+build-18
+```
+
+The normal Jenkins flow is:
+
+```text
+checkout source
+build Spring Boot app
+run tests
+build separate agent-runner Docker image
+build and push Docker image
+capture current ECS task definition
+deploy new ECS task definition
+validate deployed ECS service through the agent container
+```
+
+If validation passes, Jenkins stops there and does not run the bug-fix agent.
+
+If validation fails, Jenkins does this:
+
+```text
+rollback ECS to the previously captured task definition
+validate rollback
+run agent-runner container with JavaOrchestratorAgent
+apply configured source fix
+create GitHub PR
+send approval email
+fail the build so humans know approval is required
+```
+
+## Jenkins Shell Scripts
+
+The `.sh` files are used by Jenkins as pipeline helpers. They are not the primary manual deployment entry point.
+
+Jenkins calls:
+
+```text
+scripts/ecr_login_and_push.sh    Build & Push Image stage
+scripts/deploy_ecs.sh            Deploy to ECS stage
+scripts/rollback_ecs.sh          Rollback path when validation fails
+```
+
+Jenkins also builds the separate `agent-runner` Docker image and uses `docker run` for Java validation, optional ECS monitoring, and the failure-triggered PR/email orchestrator. That keeps the agent runtime outside of the Spring Boot application container.
+
+The expected production-style flow is:
+
+```text
+merge approved PR into main
+Jenkins detects the SCM change
+Jenkins builds and tests the Java application
+Jenkins runs the shell scripts to push/deploy/rollback
+Java validation agent verifies the ECS deployment
+External agent runner is invoked only when validation fails
+```
+
+Manual script runs are only for troubleshooting. For normal demo and project operation, run Jenkins.
+
+## Validate Rollback
+
+To test rollback intentionally, run Jenkins with:
+
+```text
+FORCE_VALIDATION_FAILURE = true
+IMAGE_TAG = blank
+```
+
+Expected proof in Jenkins:
+
+```text
+Previous ECS task definition: arn:aws:ecs:...
+Deployment validation failed: Forced validation failure requested for rollback test.
+Rollback completed and audited.
+Deployment validation succeeded: Swagger, POST/GET employee, and address special-character validation passed.
+```
+
+The build may end as failed during this forced test. That is expected because the new deployment was rejected, but ECS was restored to the previous working task definition.
+
+## Audit Check
+
+For demo proof, use the Java audit report agent. It reads the same DynamoDB `AgentAudit` table that the monitor, auto-fix, PR/email, validation, and rollback steps write to.
+
+```bash
+cd agent-runner
+
+./mvnw -q compile exec:java \
+  -Dexec.mainClass=com.example.agent.JavaAuditReportAgent \
+  -Dexec.args='--region us-east-1 --audit-table AgentAudit --limit 25'
+```
+
+Expected output is a timeline of recent actions:
+
+```text
+eventTime              eventType                    status                   source             message
+2026-...               EMAIL_NOTIFICATION_SENT       SENT                     java-pr-agent      Human approval email sent...
+2026-...               PR_CREATED                    WAITING_FOR_HUMAN...     java-pr-agent      https://github.com/...
+2026-...               DEPLOYMENT_ROLLED_BACK        ROLLED_BACK              deployment-rol...   Rolled back ECS service...
+2026-...               DEPLOYMENT_VALIDATION_FAILED  FAILED                   java-validate...    Deployment validation failed...
+```
+
+You can also inspect raw DynamoDB records directly:
+
+```bash
+AWS_PAGER="" aws dynamodb scan \
+  --table-name AgentAudit \
+  --region us-east-1 \
+  --projection-expression "eventTime,eventType,#s,message" \
+  --expression-attribute-names '{"#s":"status"}' \
+  --query 'Items[*].[eventTime.S,eventType.S,status.S,message.S]' \
+  --output table
+```
+
+Useful audit events:
+
+```text
+BUG_DETECTED
+BUG_FIXED_AUTOMATICALLY
+AUTO_FIX_VALIDATED
+PR_CREATED
+EMAIL_NOTIFICATION_SENT
+FIX_COMMITTED_FOR_APPROVAL
+DEPLOYMENT_VALIDATED
+DEPLOYMENT_VALIDATION_FAILED
+DEPLOYMENT_ROLLED_BACK
+```
+
+## Reuse On Another Repository
+
+The Java agents are configured with command-line arguments and environment variables, so another repository can reuse the same workflow by changing:
+
+- `agent-config/project-config.json`
+- `agent-config/agent-prompt.md`
+- `repo_dir`
+- `project_dir`
+- `github_repo`
+- `cluster`
+- `service`
+- `paths`
+- PR title/body/summary
+- email mode and SMTP/GitHub token environment variables
+
+Example:
+
+```bash
+cd agent-runner
+./mvnw -q compile exec:java \
+  -Dexec.mainClass=com.example.agent.JavaOrchestratorAgent \
+  -Dexec.args='--config ../agent-config/project-config.json --project-dir ../dynamodb-demo --repo-dir .. --github-repo owner/repo --cluster your-cluster --service your-service --paths path/to/Employee.java --email-mode smtp'
+```
+
+The new repository owner must provide their own `GITHUB_TOKEN` and SMTP/email environment variables.
