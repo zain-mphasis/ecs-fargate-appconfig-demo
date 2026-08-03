@@ -10,7 +10,9 @@
     "auditTable": "AgentAudit"
   },
   "testCommand": [
-    "./mvnw",
+    "cmd",
+    "/c",
+    "mvn",
     "test",
     "-q"
   ],
