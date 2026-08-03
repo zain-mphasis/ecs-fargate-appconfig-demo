@@ -1,0 +1,12 @@
+To: <APPROVAL_EMAIL_TO>
+Subject: Human approval requested for agent bug fix
+
+Human approval requested for springboot-dynamodb-project.
+
+Summary:
+Agent restored address validation, ran tests, opened a PR, and wrote an approval email preview.
+
+Review PR:
+https://github.com/zain-mphasis/ecs-fargate-appconfig-demo/pull/1
+
+Approve by merging the pull request. Deployment to ECS should proceed after approval.
