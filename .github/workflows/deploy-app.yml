@@ -19,7 +19,7 @@ concurrency:
 
 env:
   AWS_REGION: us-east-1
-  ECR_URI: 550651695856.dkr.ecr.us-east-1.amazonaws.com/ecs-fargate-appconfig-demo
+  ECR_URI: 152174417241.dkr.ecr.us-east-1.amazonaws.com/ecs-fargate-appconfig-demo
   IMAGE_TAG: gh-${{ github.run_number }}
 
 jobs:
@@ -43,7 +43,7 @@ jobs:
       - name: Configure AWS credentials (OIDC, no stored keys)
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: arn:aws:iam::550651695856:role/github-actions-deploy
+          role-to-assume: arn:aws:iam::152174417241:role/github-actions-deploy
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Build and push image with Jib
