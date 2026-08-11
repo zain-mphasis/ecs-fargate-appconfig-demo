@@ -47,7 +47,9 @@ public final class JavaSelfHealAgent {
         Path repoDir = Path.of(p.get("repo-dir", "..")).toAbsolutePath().normalize();
         String region = p.get("region", config.aws().region());
         String auditTable = p.get("audit-table", config.aws().auditTable());
-        String emailMode = p.get("email-mode", "smtp");
+        // "auto": send a real email when SMTP is configured, otherwise write a preview file
+        // (escalation must never crash just because email isn't set up).
+        String emailMode = p.get("email-mode", "auto");
         boolean autopilot = p.has("autopilot");
         boolean dryRun = p.has("dry-run");
         List<String> paths = p.list("paths",

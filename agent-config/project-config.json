@@ -35,24 +35,5 @@
         "address": "123 Main St, Newark NJ"
       }
     }
-   /* ,
-    {
-      "name": "employee-address-special-character-validation",
-      "type": "java-field-annotation",
-      "file": "src/main/java/com/example/dynamodb_demo/model/Employee.java",
-      "field": "address",
-      "requiredImport": "jakarta.validation.constraints.Pattern",
-      "annotation": "@Pattern(regexp = \"^[a-zA-Z0-9 ,.-]+$\", message = \"address contains invalid characters\")",
-      "bugType": "VALIDATION",
-      "severity": "MEDIUM",
-      "validationEndpoint": "/api/employees",
-      "expectedFailureStatus": 400,
-      "invalidPayload": {
-        "employeeId": "EMP-ADDR-BAD",
-        "name": "Invalid Employee",
-        "department": "Quality",
-        "address": "New_Jersey:"
-      }*/
-    }
   ]
 }
