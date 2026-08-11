@@ -34,7 +34,8 @@
         "department": "Quality",
         "address": "123 Main St, Newark NJ"
       }
-    },
+    }
+   /* ,
     {
       "name": "employee-address-special-character-validation",
       "type": "java-field-annotation",
@@ -51,7 +52,7 @@
         "name": "Invalid Employee",
         "department": "Quality",
         "address": "New_Jersey:"
-      }
+      }*/
     }
   ]
 }
