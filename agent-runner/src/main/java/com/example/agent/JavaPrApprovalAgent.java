@@ -323,7 +323,7 @@ public final class JavaPrApprovalAgent {
         return true;
     }
 
-    private static boolean sendEmail(String subject, String body, String mode, boolean dryRun, Path outbox)
+    static boolean sendEmail(String subject, String body, String mode, boolean dryRun, Path outbox)
             throws IOException, MessagingException {
         String to = env("APPROVAL_EMAIL_TO", "").trim();
         String from = env("EMAIL_FROM", env("SMTP_USERNAME", "")).trim();
