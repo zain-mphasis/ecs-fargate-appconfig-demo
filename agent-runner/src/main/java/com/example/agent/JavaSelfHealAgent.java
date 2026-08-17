@@ -116,8 +116,24 @@ public final class JavaSelfHealAgent {
         }
         tried.add("newly-devised fixes from the built-in library");
 
-        // Everything failed → genuine human need.
-        log("Every strategy failed. This is a genuine manual case. Escalating to a human.");
+        // Strategy 5 — guaranteed green: auto-revert the offending commit so main is never left broken.
+        if (autopilot && !dryRun) {
+            log("Strategy 5: no fix worked. Auto-reverting the offending commit to keep '" + baseBranch + "' green...");
+            if (autoRevert(repoDir, projectDir, testCommand)) {
+                boolean pushed = rawPush(repoDir, baseBranch);
+                log(pushed
+                        ? "Auto-reverted the bad commit and pushed. '" + baseBranch + "' is green again. Human notified (FYI only)."
+                        : "Auto-revert succeeded locally but the push failed (check git auth).");
+                audit(region, auditTable, "RESOLVED_BY_AGENT", "AUTO_REVERTED", "MEDIUM", repoDir.toString(),
+                        "Autopilot could not repair the change, so it auto-reverted the offending commit to keep the branch green.", dryRun);
+                sendFyiEmail(emailMode, repoDir, dryRun);
+                return 0;
+            }
+            tried.add("auto-revert of the offending commit");
+        }
+
+        // Even a revert could not produce a green build → genuine human need.
+        log("Every strategy — including an automatic revert — failed. Escalating to a human.");
         writeManualCloseout(closeout, projectDir, tried);
         audit(region, auditTable, "ESCALATED_TO_HUMAN", "MANUAL_ACTION_REQUIRED", "HIGH", projectDir.toString(),
                 "Autopilot could not repair the build after trying: " + String.join("; ", tried), dryRun);
@@ -158,6 +174,50 @@ public final class JavaSelfHealAgent {
 
     private static boolean runTests(Path projectDir, List<String> testCommand) throws Exception {
         return AgentSupport.run(projectDir, testCommand, false).exitCode() == 0;
+    }
+
+    private static boolean autoRevert(Path repoDir, Path projectDir, List<String> testCommand) {
+        try {
+            // discard any partial fix attempts, then revert the offending commit as a new commit
+            AgentSupport.run(repoDir, List.of("git", "checkout", "--", "."), false);
+            AgentSupport.CommandResult revert = AgentSupport.run(repoDir,
+                    List.of("git", "revert", "--no-edit", "HEAD"), false);
+            if (revert.exitCode() != 0) {
+                AgentSupport.run(repoDir, List.of("git", "revert", "--abort"), false);
+                return false;
+            }
+            return runTests(projectDir, testCommand);
+        } catch (Exception e) {
+            log("Auto-revert failed: " + e.getMessage());
+            return false;
+        }
+    }
+
+    private static boolean rawPush(Path repoDir, String baseBranch) {
+        try {
+            String token = firstNonBlank(System.getenv("GH_TOKEN"), System.getenv("GITHUB_TOKEN"));
+            List<String> push;
+            if (token != null && !token.isBlank()) {
+                String origin = AgentSupport.run(repoDir, List.of("git", "remote", "get-url", "origin"), false)
+                        .stdout().trim();
+                String authUrl = origin.replaceFirst("^https://", "https://x-access-token:" + token + "@");
+                push = List.of("git", "push", authUrl, "HEAD:" + baseBranch);
+            } else {
+                push = List.of("git", "push", "origin", "HEAD:" + baseBranch);
+            }
+            return AgentSupport.run(repoDir, push, false).exitCode() == 0;
+        } catch (Exception e) {
+            log("Push failed: " + e.getMessage());
+            return false;
+        }
+    }
+
+    private static void sendFyiEmail(String emailMode, Path repoDir, boolean dryRun) throws Exception {
+        String subject = "FYI: autopilot auto-reverted a bad commit (branch kept green)";
+        String body = "The autopilot self-heal agent could not repair a failing change, so it automatically "
+                + "reverted the offending commit to keep the branch green.\n\n"
+                + "No action is required — this is informational. Review the revert when convenient.\n";
+        JavaPrApprovalAgent.sendEmail(subject, body, emailMode, dryRun, repoDir.resolve("build/fyi-email.txt"));
     }
 
     private static boolean restoreFromHistory(Path repoDir, String ref, List<String> paths) {
