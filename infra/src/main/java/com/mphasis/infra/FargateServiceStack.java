@@ -5,6 +5,8 @@ import java.util.Map;
 import java.util.TreeMap;
 import software.amazon.awscdk.Stack;
 import software.amazon.awscdk.StackProps;
+import software.amazon.awscdk.services.cloudwatch.CreateAlarmOptions;
+import software.amazon.awscdk.services.cloudwatch.TreatMissingData;
 import software.amazon.awscdk.services.ec2.Vpc;
 import software.amazon.awscdk.services.ecr.IRepository;
 import software.amazon.awscdk.services.ecs.Cluster;
@@ -12,6 +14,7 @@ import software.amazon.awscdk.services.ecs.ContainerImage;
 import software.amazon.awscdk.services.ecs.patterns.ApplicationLoadBalancedFargateService;
 import software.amazon.awscdk.services.ecs.patterns.ApplicationLoadBalancedTaskImageOptions;
 import software.amazon.awscdk.services.elasticloadbalancingv2.HealthCheck;
+import software.amazon.awscdk.services.elasticloadbalancingv2.HttpCodeElb;
 import software.amazon.awscdk.services.iam.PolicyStatement;
 import software.constructs.Construct;
 
@@ -79,5 +82,22 @@ public class FargateServiceStack extends Stack {
                         + "/environment/" + appConfig.getEnvironmentId()
                         + "/configuration/" + appConfig.getConfigurationProfileId()))
                 .build());
+
+        // Observability: alarm if any task is unhealthy, or if the load balancer returns 5xx errors.
+        service.getTargetGroup().metricUnhealthyHostCount().createAlarm(this, "UnhealthyTasksAlarm",
+                CreateAlarmOptions.builder()
+                        .alarmDescription("One or more Fargate tasks are failing health checks")
+                        .threshold(1)
+                        .evaluationPeriods(1)
+                        .treatMissingData(TreatMissingData.NOT_BREACHING)
+                        .build());
+
+        service.getLoadBalancer().metricHttpCodeElb(HttpCodeElb.ELB_5XX_COUNT).createAlarm(this, "Http5xxAlarm",
+                CreateAlarmOptions.builder()
+                        .alarmDescription("Load balancer is returning 5xx errors")
+                        .threshold(5)
+                        .evaluationPeriods(1)
+                        .treatMissingData(TreatMissingData.NOT_BREACHING)
+                        .build());
     }
 }
