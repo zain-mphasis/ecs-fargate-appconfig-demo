@@ -122,11 +122,10 @@ public final class JavaSelfHealAgent {
             if (autoRevert(repoDir, projectDir, testCommand)) {
                 boolean pushed = rawPush(repoDir, baseBranch);
                 log(pushed
-                        ? "Auto-reverted the bad commit and pushed. '" + baseBranch + "' is green again. Human notified (FYI only)."
+                        ? "Auto-reverted the bad commit and pushed. '" + baseBranch + "' is green again. No email — no manual action is needed."
                         : "Auto-revert succeeded locally but the push failed (check git auth).");
                 audit(region, auditTable, "RESOLVED_BY_AGENT", "AUTO_REVERTED", "MEDIUM", repoDir.toString(),
                         "Autopilot could not repair the change, so it auto-reverted the offending commit to keep the branch green.", dryRun);
-                sendFyiEmail(emailMode, repoDir, dryRun);
                 return 0;
             }
             tried.add("auto-revert of the offending commit");
@@ -210,14 +209,6 @@ public final class JavaSelfHealAgent {
             log("Push failed: " + e.getMessage());
             return false;
         }
-    }
-
-    private static void sendFyiEmail(String emailMode, Path repoDir, boolean dryRun) throws Exception {
-        String subject = "FYI: autopilot auto-reverted a bad commit (branch kept green)";
-        String body = "The autopilot self-heal agent could not repair a failing change, so it automatically "
-                + "reverted the offending commit to keep the branch green.\n\n"
-                + "No action is required — this is informational. Review the revert when convenient.\n";
-        JavaPrApprovalAgent.sendEmail(subject, body, emailMode, dryRun, repoDir.resolve("build/fyi-email.txt"));
     }
 
     private static boolean restoreFromHistory(Path repoDir, String ref, List<String> paths) {
